@@ -29,17 +29,19 @@ def is_address_reachable(destination):
     return result.is_alive
 
 
-def find_mtu(destination, min_mtu, max_mtu, interval):
+def find_mtu(destination, min_mtu, max_mtu, interval, timeout, count):
     low, high = min_mtu, max_mtu
-    while low <= high:
+    while low + 1 < high:
         mid = (low + high) // 2
 
         data_size = mid - 28
 
         try:
-            ping_res = icmplib.ping(
+            status = icmplib.ping(
                 destination,
+                count=count,
                 interval=interval,
+                timeout=timeout,
                 payload_size=data_size,
             )
         except icmplib.exceptions.NameLookupError:
@@ -53,10 +55,10 @@ def find_mtu(destination, min_mtu, max_mtu, interval):
             exit(1)
 
         logging.info(f"Testing MTU size {mid} (ping size {data_size})")
-        if ping_res.is_alive:
-            low = mid + 1
+        if status.is_alive:
+            low = mid
         else:
-            high = mid - 1
+            high = mid
         time.sleep(interval)
     return high
 
@@ -68,6 +70,9 @@ if __name__ == '__main__':
     parser.add_argument('--max_mtu', type=valid_mtu, required=True, help='Maximum MTU value to test')
     parser.add_argument('--address', type=str, required=True, help='Destination address to test')
     parser.add_argument('--interval', type=float, default=0, help='Interval between attempts (seconds)')
+    parser.add_argument('--timeout', type=float, default=2, help='Timeout (seconds)')
+    parser.add_argument('--count', type=float, default=3, help='Ping count')
+
     args = parser.parse_args()
 
     if not is_address_reachable(args.address):
@@ -75,7 +80,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     try:
-        mtu = find_mtu(args.address, args.min_mtu, args.max_mtu, args.interval)
+        mtu = find_mtu(args.address, args.min_mtu, args.max_mtu, args.interval, args.timeout, args.count)
         if mtu:
             logging.info(f"The minimum MTU is: {mtu}")
         else:
